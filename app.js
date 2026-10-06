@@ -1,798 +1,1326 @@
-"use strict";
 
-/*
- * Baby Shiba Inu — Shibarium DApp
- *
- * This file belongs ONLY to:
- * baby-shiba-dapp
- *
- * Telegram game is NOT modified.
- */
+document.addEventListener("DOMContentLoaded", function () {
+
+    "use strict";
 
 
-/* =========================================
-   GAME URL
-========================================= */
+    /* ========================================
+       TELEGRAM
+    ======================================== */
 
-const GAME_URL =
-    "https://babyshibainu86-eng.github.io/baby-shiba-shibarium/";
+    const tg =
+        window.Telegram &&
+        window.Telegram.WebApp
+            ? window.Telegram.WebApp
+            : null;
 
-
-/* =========================================
-   SHIBARIUM MAINNET
-========================================= */
-
-const SHIBARIUM = {
-
-    chainId: "0x6D",
-
-    chainName: "Shibarium",
-
-    nativeCurrency: {
-
-        name: "BONE",
-
-        symbol: "BONE",
-
-        decimals: 18
-
-    },
-
-    rpcUrls: [
-
-        "https://rpc.shibarium.shib.io"
-
-    ],
-
-    blockExplorerUrls: [
-
-        "https://shibariumscan.io"
-
-    ]
-
-};
-
-
-/* =========================================
-   APP START
-========================================= */
-
-document.addEventListener(
-    "DOMContentLoaded",
-    () => {
-
-        setupPlayButton();
-
-        setupWalletButton();
-
-        detectWallet();
-
-    }
-);
-
-
-/* =========================================
-   PLAY GAME
-========================================= */
-
-function setupPlayButton() {
-
-    const button =
-        document.getElementById(
-            "playBtn"
-        );
-
-
-    if (!button) {
-
-        return;
-
-    }
-
-
-    button.addEventListener(
-        "click",
-        () => {
-
-            window.location.href =
-                GAME_URL;
-
+    if (tg) {
+        try {
+            tg.ready();
+            tg.expand();
+        } catch (e) {
+            console.log("Telegram:", e);
         }
-    );
-
-}
-
-
-/* =========================================
-   CONNECT BUTTON
-========================================= */
-
-function setupWalletButton() {
-
-    const button =
-        document.getElementById(
-            "walletBtn"
-        );
-
-
-    if (!button) {
-
-        return;
-
     }
 
 
-    button.addEventListener(
-        "click",
-        connectWallet
-    );
+    /* ========================================
+       STORAGE
+    ======================================== */
 
-}
+    const STORAGE_KEY = "babyShibaMiningGame";
 
 
-/* =========================================
-   DETECT WALLET
-========================================= */
+    /* ========================================
+       GAME STATE
+    ======================================== */
 
-function detectWallet() {
+    let game = {
+        balance: 0,
+        totalMined: 0,
 
-    if (
-        typeof window === "undefined"
-    ) {
+        level: 1,
+        xp: 0,
 
-        return;
+        tapPower: 1,
+        mineRate: 1,
 
-    }
+        energy: 1000,
+        maxEnergy: 1000,
 
+        vipLevel: 0,
 
-    if (
-        window.ethereum
-    ) {
+        lastDailyReward: 0
+    };
 
-        listenToWalletEvents();
 
-        checkExistingConnection();
+    /* ========================================
+       LOAD GAME
+    ======================================== */
 
-    }
+    function loadGame() {
 
-}
+        try {
 
+            const saved =
+                localStorage.getItem(STORAGE_KEY);
 
-/* =========================================
-   EXISTING CONNECTION
-========================================= */
-
-async function checkExistingConnection() {
-
-    try {
-
-        const accounts =
-            await window.ethereum.request({
-
-                method:
-                    "eth_accounts"
-
-            });
-
-
-        if (
-            !accounts ||
-            accounts.length === 0
-        ) {
-
-            return;
-
-        }
-
-
-        const chainId =
-            await window.ethereum.request({
-
-                method:
-                    "eth_chainId"
-
-            });
-
-
-        updateWalletUI(
-            accounts[0],
-            chainId
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Wallet detection error:",
-            error
-        );
-
-    }
-
-}
-
-
-/* =========================================
-   CONNECT WALLET
-========================================= */
-
-async function connectWallet() {
-
-    const button =
-        document.getElementById(
-            "walletBtn"
-        );
-
-
-    /*
-     * No injected wallet provider.
-     *
-     * On mobile Chrome this can happen even
-     * when MetaMask or Trust Wallet is installed.
-     */
-
-    if (
-        !window.ethereum
-    ) {
-
-        showWalletOptions();
-
-        return;
-
-    }
-
-
-    try {
-
-        if (button) {
-
-            button.disabled =
-                true;
-
-            button.textContent =
-                "Connecting...";
-
-        }
-
-
-        const accounts =
-            await window.ethereum.request({
-
-                method:
-                    "eth_requestAccounts"
-
-            });
-
-
-        if (
-            !accounts ||
-            accounts.length === 0
-        ) {
-
-            resetWalletButton();
-
-            showToast(
-                "No wallet account was selected."
-            );
-
-            return;
-
-        }
-
-
-        const address =
-            accounts[0];
-
-
-        let chainId =
-            await window.ethereum.request({
-
-                method:
-                    "eth_chainId"
-
-            });
-
-
-        /*
-         * Switch to Shibarium.
-         */
-
-        if (
-            chainId.toLowerCase() !==
-            SHIBARIUM.chainId.toLowerCase()
-        ) {
-
-            await switchToShibarium();
-
-
-            chainId =
-                await window.ethereum.request({
-
-                    method:
-                        "eth_chainId"
-
-                });
-
-        }
-
-
-        /*
-         * Verify network.
-         */
-
-        if (
-            chainId.toLowerCase() !==
-            SHIBARIUM.chainId.toLowerCase()
-        ) {
-
-            resetWalletButton();
-
-            showToast(
-                "Please switch to Shibarium."
-            );
-
-            return;
-
-        }
-
-
-        updateWalletUI(
-            address,
-            chainId
-        );
-
-
-        showToast(
-            "Wallet connected to Shibarium."
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Wallet connection error:",
-            error
-        );
-
-
-        resetWalletButton();
-
-
-        if (
-            error &&
-            error.code === 4001
-        ) {
-
-            showToast(
-                "Wallet connection was cancelled."
-            );
-
-        } else {
-
-            showToast(
-                "Wallet connection could not be completed."
-            );
-
-        }
-
-    } finally {
-
-        if (button) {
-
-            button.disabled =
-                false;
-
-        }
-
-    }
-
-}
-
-
-/* =========================================
-   SWITCH TO SHIBARIUM
-========================================= */
-
-async function switchToShibarium() {
-
-    try {
-
-        await window.ethereum.request({
-
-            method:
-                "wallet_switchEthereumChain",
-
-            params: [
-
-                {
-                    chainId:
-                        SHIBARIUM.chainId
-                }
-
-            ]
-
-        );
-
-    } catch (error) {
-
-        /*
-         * 4902 =
-         * Shibarium is not added yet.
-         */
-
-        if (
-            error &&
-            error.code !== 4902
-        ) {
-
-            throw error;
-
-        }
-
-
-        await window.ethereum.request({
-
-            method:
-                "wallet_addEthereumChain",
-
-            params: [
-
-                SHIBARIUM
-
-            ]
-
-        });
-
-    }
-
-}
-
-
-/* =========================================
-   UPDATE UI
-========================================= */
-
-function updateWalletUI(
-    address,
-    chainId
-) {
-
-    const button =
-        document.getElementById(
-            "walletBtn"
-        );
-
-
-    const status =
-        document.getElementById(
-            "walletStatus"
-        );
-
-
-    if (!address) {
-
-        return;
-
-    }
-
-
-    const shortAddress =
-        address.slice(0, 6) +
-        "..." +
-        address.slice(-4);
-
-
-    if (button) {
-
-        button.disabled =
-            false;
-
-        button.textContent =
-            "✓ " + shortAddress;
-
-        button.classList.add(
-            "connected"
-        );
-
-    }
-
-
-    if (status) {
-
-        if (
-            chainId &&
-            chainId.toLowerCase() ===
-            SHIBARIUM.chainId.toLowerCase()
-        ) {
-
-            status.textContent =
-                "✓ Connected to Shibarium • " +
-                shortAddress;
-
-            status.classList.add(
-                "connected"
-            );
-
-        } else {
-
-            status.textContent =
-                "Wallet connected • Please switch to Shibarium";
-
-            status.classList.remove(
-                "connected"
-            );
-
-        }
-
-    }
-
-}
-
-
-/* =========================================
-   RESET
-========================================= */
-
-function resetWalletButton() {
-
-    const button =
-        document.getElementById(
-            "walletBtn"
-        );
-
-
-    const status =
-        document.getElementById(
-            "walletStatus"
-        );
-
-
-    if (button) {
-
-        button.disabled =
-            false;
-
-        button.textContent =
-            "🔗 CONNECT WALLET";
-
-        button.classList.remove(
-            "connected"
-        );
-
-    }
-
-
-    if (status) {
-
-        status.textContent =
-            "Wallet not connected";
-
-        status.classList.remove(
-            "connected"
-        );
-
-    }
-
-}
-
-
-/* =========================================
-   WALLET EVENTS
-========================================= */
-
-function listenToWalletEvents() {
-
-    if (
-        !window.ethereum ||
-        !window.ethereum.on
-    ) {
-
-        return;
-
-    }
-
-
-    window.ethereum.on(
-        "accountsChanged",
-        (accounts) => {
-
-            if (
-                !accounts ||
-                accounts.length === 0
-            ) {
-
-                resetWalletButton();
-
-                showToast(
-                    "Wallet disconnected."
-                );
-
+            if (!saved) {
                 return;
+            }
 
+            const data =
+                JSON.parse(saved);
+
+            if (!data || typeof data !== "object") {
+                return;
+            }
+
+            game.balance =
+                Number(data.balance) || 0;
+
+            game.totalMined =
+                Number(data.totalMined) || 0;
+
+            game.level =
+                Number(data.level) || 1;
+
+            game.xp =
+                Number(data.xp) || 0;
+
+            game.tapPower =
+                Number(data.tapPower) || 1;
+
+            game.mineRate =
+                Number(data.mineRate) || 1;
+
+            game.energy =
+                Number(data.energy);
+
+            if (isNaN(game.energy)) {
+                game.energy = 1000;
+            }
+
+            game.maxEnergy =
+                Number(data.maxEnergy);
+
+            if (isNaN(game.maxEnergy)) {
+                game.maxEnergy = 1000;
+            }
+
+            game.vipLevel =
+                Number(data.vipLevel) || 0;
+
+            game.lastDailyReward =
+                Number(data.lastDailyReward) || 0;
+
+        } catch (error) {
+
+            console.log("Load error:", error);
+
+        }
+
+    }
+
+
+    /* ========================================
+       SAVE GAME
+    ======================================== */
+
+    function saveGame() {
+
+        try {
+
+            localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify(game)
+            );
+
+        } catch (error) {
+
+            console.log("Save error:", error);
+
+        }
+
+    }
+
+
+    loadGame();
+
+
+    /* ========================================
+       DOM
+    ======================================== */
+
+    const introPage =
+        document.getElementById("introPage");
+
+    const gameApp =
+        document.getElementById("gameApp");
+
+    const startGame =
+        document.getElementById("startGame");
+
+
+    const playerName =
+        document.getElementById("playerName");
+
+    const playerId =
+        document.getElementById("playerId");
+
+
+    const balance =
+        document.getElementById("balance");
+
+    const totalMined =
+        document.getElementById("totalMined");
+
+    const levelValue =
+        document.getElementById("levelValue");
+
+    const xpValue =
+        document.getElementById("xpValue");
+
+    const xpText =
+        document.getElementById("xpText");
+
+    const xpFill =
+        document.getElementById("xpFill");
+
+
+    const mineRate =
+        document.getElementById("mineRate");
+
+    const tapPower =
+        document.getElementById("tapPower");
+
+
+    const energy =
+        document.getElementById("energy");
+
+    const maxEnergy =
+        document.getElementById("maxEnergy");
+
+    const energyFill =
+        document.getElementById("energyFill");
+
+
+    const vipLevel =
+        document.getElementById("vipLevel");
+
+    const currentVipLevel =
+        document.getElementById("currentVipLevel");
+
+    const vipMiningBonus =
+        document.getElementById("vipMiningBonus");
+
+    const vipEnergyBonus =
+        document.getElementById("vipEnergyBonus");
+
+
+    const shibaButton =
+        document.getElementById("shibaButton");
+
+
+    const toast =
+        document.getElementById("toast");
+
+    const effects =
+        document.getElementById("effects");
+
+
+    /* ========================================
+       NUMBER
+    ======================================== */
+
+    function number(value) {
+
+        return Math.floor(
+            Number(value) || 0
+        ).toLocaleString("en-US");
+
+    }
+
+
+    /* ========================================
+       TOAST
+    ======================================== */
+
+    let toastTimeout = null;
+
+    function showToast(message) {
+
+        if (!toast) {
+            return;
+        }
+
+        toast.textContent = message;
+
+        toast.classList.add("show");
+
+        clearTimeout(toastTimeout);
+
+        toastTimeout =
+            setTimeout(function () {
+
+                toast.classList.remove("show");
+
+            }, 1800);
+
+    }
+
+
+    /* ========================================
+       TELEGRAM USER
+    ======================================== */
+
+    function loadTelegramUser() {
+
+        if (
+            tg &&
+            tg.initDataUnsafe &&
+            tg.initDataUnsafe.user
+        ) {
+
+            const user =
+                tg.initDataUnsafe.user;
+
+            let name =
+                user.first_name || "";
+
+            if (user.last_name) {
+                name +=
+                    " " + user.last_name;
+            }
+
+            name =
+                name.trim() ||
+                user.username ||
+                "Player";
+
+
+            if (playerName) {
+                playerName.textContent =
+                    name;
             }
 
 
-            getCurrentChain(
-                accounts[0]
-            );
+            if (playerId) {
+                playerId.textContent =
+                    user.id || "---";
+            }
 
         }
-    );
+
+    }
 
 
-    window.ethereum.on(
-        "chainChanged",
-        (chainId) => {
-
-            getCurrentAccount(
-                chainId
-            );
-
-        }
-    );
-
-}
+    loadTelegramUser();
 
 
-/* =========================================
-   CURRENT ACCOUNT
-========================================= */
+    /* ========================================
+       XP / LEVEL
+    ======================================== */
 
-async function getCurrentAccount(
-    chainId
-) {
+    function xpNeeded() {
 
-    try {
+        return game.level * 100;
 
-        const accounts =
-            await window.ethereum.request({
-
-                method:
-                    "eth_accounts"
-
-            });
+    }
 
 
-        if (
-            !accounts ||
-            accounts.length === 0
+    function addXP(amount) {
+
+        game.xp += amount;
+
+
+        while (
+            game.xp >= xpNeeded()
         ) {
 
-            resetWalletButton();
+            game.xp -= xpNeeded();
 
-            return;
-
-        }
-
-
-        updateWalletUI(
-            accounts[0],
-            chainId
-        );
-
-
-        if (
-            chainId.toLowerCase() !==
-            SHIBARIUM.chainId.toLowerCase()
-        ) {
+            game.level += 1;
 
             showToast(
-                "Please switch to Shibarium."
+                "🎉 Level " +
+                game.level
             );
 
         }
 
-    } catch (error) {
+    }
 
-        console.error(
-            "Account update error:",
-            error
+
+    /* ========================================
+       VIP DATA
+    ======================================== */
+
+    const VIP = {
+
+        0: {
+            mining: 0,
+            energy: 0
+        },
+
+        1: {
+            mining: 5,
+            energy: 100
+        },
+
+        2: {
+            mining: 10,
+            energy: 200
+        },
+
+        3: {
+            mining: 15,
+            energy: 300
+        },
+
+        4: {
+            mining: 25,
+            energy: 500
+        },
+
+        5: {
+            mining: 50,
+            energy: 1000
+        }
+
+    };
+
+
+    function getVIP() {
+
+        return (
+            VIP[game.vipLevel] ||
+            VIP[0]
         );
 
     }
 
-}
+
+    /* ========================================
+       UPDATE VIP
+    ======================================== */
+
+    function updateVIP() {
+
+        const vip =
+            getVIP();
 
 
-/* =========================================
-   CURRENT CHAIN
-========================================= */
-
-async function getCurrentChain(
-    address
-) {
-
-    try {
-
-        const chainId =
-            await window.ethereum.request({
-
-                method:
-                    "eth_chainId"
-
-            });
+        if (vipLevel) {
+            vipLevel.textContent =
+                game.vipLevel;
+        }
 
 
-        updateWalletUI(
-            address,
-            chainId
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Chain detection error:",
-            error
-        );
-
-    }
-
-}
+        if (currentVipLevel) {
+            currentVipLevel.textContent =
+                "VIP " +
+                game.vipLevel;
+        }
 
 
-/* =========================================
-   MOBILE WALLET MESSAGE
-========================================= */
-
-function showWalletOptions() {
-
-    const message =
-        "No wallet provider was detected in this browser. " +
-        "Open Baby Shiba Inu from your wallet's DApp browser, " +
-        "or use the WalletConnect option when enabled.";
+        if (vipMiningBonus) {
+            vipMiningBonus.textContent =
+                "+" +
+                vip.mining +
+                "%";
+        }
 
 
-    showToast(
-        message
-    );
-
-}
-
-
-/* =========================================
-   TOAST
-========================================= */
-
-function showToast(
-    message
-) {
-
-    const toast =
-        document.getElementById(
-            "toast"
-        );
-
-
-    if (!toast) {
-
-        return;
+        if (vipEnergyBonus) {
+            vipEnergyBonus.textContent =
+                "+" +
+                vip.energy;
+        }
 
     }
 
 
-    toast.textContent =
-        message;
+    /* ========================================
+       UPDATE UI
+    ======================================== */
+
+    function updateUI() {
+
+        if (balance) {
+            balance.textContent =
+                number(game.balance);
+        }
 
 
-    toast.classList.add(
-        "show"
-    );
+        if (totalMined) {
+            totalMined.textContent =
+                number(game.totalMined);
+        }
 
 
-    clearTimeout(
-        showToast.timer
-    );
+        if (levelValue) {
+            levelValue.textContent =
+                game.level;
+        }
 
 
-    showToast.timer =
-        setTimeout(
-            () => {
+        if (xpValue) {
+            xpValue.textContent =
+                number(game.xp);
+        }
 
-                toast.classList.remove(
-                    "show"
+
+        if (tapPower) {
+            tapPower.textContent =
+                number(game.tapPower);
+        }
+
+
+        if (mineRate) {
+            mineRate.textContent =
+                number(game.mineRate);
+        }
+
+
+        if (energy) {
+            energy.textContent =
+                Math.floor(game.energy);
+        }
+
+
+        if (maxEnergy) {
+            maxEnergy.textContent =
+                Math.floor(game.maxEnergy);
+        }
+
+
+        /* ENERGY BAR */
+
+        if (energyFill) {
+
+            let percent =
+                (
+                    game.energy /
+                    game.maxEnergy
+                ) * 100;
+
+
+            if (!isFinite(percent)) {
+                percent = 0;
+            }
+
+
+            percent =
+                Math.max(
+                    0,
+                    Math.min(100, percent)
                 );
 
-            },
-            4000
+
+            energyFill.style.width =
+                percent + "%";
+
+        }
+
+
+        /* XP BAR */
+
+        const required =
+            xpNeeded();
+
+
+        if (xpText) {
+
+            xpText.textContent =
+                number(game.xp) +
+                " / " +
+                number(required);
+
+        }
+
+
+        if (xpFill) {
+
+            let percent =
+                (
+                    game.xp /
+                    required
+                ) * 100;
+
+
+            percent =
+                Math.max(
+                    0,
+                    Math.min(100, percent)
+                );
+
+
+            xpFill.style.width =
+                percent + "%";
+
+        }
+
+
+        updateVIP();
+
+    }
+
+
+    /* ========================================
+       PAGE SYSTEM
+    ======================================== */
+
+    function showPage(pageId) {
+
+        const pages =
+            document.querySelectorAll(
+                ".game-page"
+            );
+
+
+        pages.forEach(function (page) {
+
+            page.classList.remove(
+                "active"
+            );
+
+        });
+
+
+        const page =
+            document.getElementById(pageId);
+
+
+        if (page) {
+
+            page.classList.add(
+                "active"
+            );
+
+        }
+
+
+        const nav =
+            document.querySelectorAll(
+                ".nav-item"
+            );
+
+
+        nav.forEach(function (item) {
+
+            item.classList.remove(
+                "active"
+            );
+
+
+            if (
+                item.dataset.page ===
+                pageId
+            ) {
+
+                item.classList.add(
+                    "active"
+                );
+
+            }
+
+        });
+
+
+        window.scrollTo(0, 0);
+
+    }
+
+
+    /* ========================================
+       NAVIGATION
+    ======================================== */
+
+    document
+        .querySelectorAll(".nav-item")
+        .forEach(function (item) {
+
+            item.addEventListener(
+                "click",
+                function () {
+
+                    const page =
+                        item.dataset.page;
+
+                    if (page) {
+                        showPage(page);
+                    }
+
+                }
+            );
+
+        });
+
+
+    /* ========================================
+       START GAME
+    ======================================== */
+
+    if (startGame) {
+
+        startGame.addEventListener(
+            "click",
+            function () {
+
+                if (introPage) {
+
+                    introPage.classList.add(
+                        "hidden"
+                    );
+
+                }
+
+
+                if (gameApp) {
+
+                    gameApp.classList.remove(
+                        "hidden"
+                    );
+
+                }
+
+
+                showPage(
+                    "miningPage"
+                );
+
+
+                updateUI();
+
+            }
         );
 
-  }
+    }
+
+
+    /* ========================================
+       TAP MINING
+    ======================================== */
+
+    if (shibaButton) {
+
+        shibaButton.addEventListener(
+            "click",
+            function () {
+
+                if (game.energy < 1) {
+
+                    showToast(
+                        "⚡ Not enough energy"
+                    );
+
+                    return;
+
+                }
+
+
+                const vip =
+                    getVIP();
+
+
+                const bonus =
+                    1 +
+                    (
+                        vip.mining /
+                        100
+                    );
+
+
+                const earned =
+                    game.tapPower *
+                    bonus;
+
+
+                game.balance +=
+                    earned;
+
+
+                game.totalMined +=
+                    earned;
+
+
+                game.energy -= 1;
+
+
+                addXP(1);
+
+
+                createEffect(
+                    earned
+                );
+
+
+                updateUI();
+
+            }
+        );
+
+    }
+
+
+    /* ========================================
+       EFFECT
+    ======================================== */
+
+    function createEffect(amount) {
+
+        if (!effects) {
+            return;
+        }
+
+
+        const item =
+            document.createElement("div");
+
+
+        item.className =
+            "coin-effect";
+
+
+        item.textContent =
+            "+" +
+            number(amount);
+
+
+        effects.appendChild(item);
+
+
+        setTimeout(
+            function () {
+
+                item.remove();
+
+            },
+            900
+        );
+
+    }
+
+
+    /* ========================================
+       SHOP - ENERGY
+    ======================================== */
+
+    const energyPack =
+        document.getElementById(
+            "energyPackButton"
+        );
+
+
+    if (energyPack) {
+
+        energyPack.addEventListener(
+            "click",
+            function () {
+
+                const price = 250;
+
+
+                if (
+                    game.balance <
+                    price
+                ) {
+
+                    showToast(
+                        "❌ Not enough BSHIB"
+                    );
+
+                    return;
+
+                }
+
+
+                game.balance -=
+                    price;
+
+
+                game.energy =
+                    Math.min(
+                        game.maxEnergy,
+                        game.energy + 250
+                    );
+
+
+                showToast(
+                    "⚡ +250 Energy"
+                );
+
+
+                updateUI();
+
+                saveGame();
+
+            }
+        );
+
+    }
+
+
+    /* ========================================
+       SHOP - MINING BOOST
+    ======================================== */
+
+    const miningBoost =
+        document.getElementById(
+            "miningBoostButton"
+        );
+
+
+    if (miningBoost) {
+
+        miningBoost.addEventListener(
+            "click",
+            function () {
+
+                const price = 500;
+
+
+                if (
+                    game.balance <
+                    price
+                ) {
+
+                    showToast(
+                        "❌ Not enough BSHIB"
+                    );
+
+                    return;
+
+                }
+
+
+                game.balance -=
+                    price;
+
+
+                game.tapPower += 1;
+
+
+                showToast(
+                    "🚀 Tap Power +1"
+                );
+
+
+                updateUI();
+
+                saveGame();
+
+            }
+        );
+
+    }
+
+
+    /* ========================================
+       VIP PURCHASE
+    ======================================== */
+
+    const vipPrices = {
+
+        1: 10000,
+        2: 50000,
+        3: 150000,
+        4: 400000,
+        5: 1000000
+
+    };
+
+
+    document
+        .querySelectorAll(".vip-buy-btn")
+        .forEach(function (button) {
+
+            button.addEventListener(
+                "click",
+                function () {
+
+                    const selected =
+                        Number(
+                            button.dataset.vip
+                        );
+
+
+                    if (
+                        selected <=
+                        game.vipLevel
+                    ) {
+
+                        showToast(
+                            "👑 Already activated"
+                        );
+
+                        return;
+
+                    }
+
+
+                    const price =
+                        vipPrices[selected];
+
+
+                    if (
+                        game.balance <
+                        price
+                    ) {
+
+                        showToast(
+                            "❌ Not enough BSHIB"
+                        );
+
+                        return;
+
+                    }
+
+
+                    game.balance -=
+                        price;
+
+
+                    game.vipLevel =
+                        selected;
+
+
+                    const vip =
+                        getVIP();
+
+
+                    game.maxEnergy =
+                        1000 +
+                        vip.energy;
+
+
+                    game.energy =
+                        Math.min(
+                            game.maxEnergy,
+                            game.energy +
+                            vip.energy
+                        );
+
+
+                    showToast(
+                        "👑 VIP " +
+                        selected +
+                        " Activated"
+                    );
+
+
+                    updateUI();
+
+                    saveGame();
+
+                }
+            );
+
+        });
+
+
+    /* ========================================
+       DAILY VIP REWARD
+    ======================================== */
+
+    const vipReward =
+        document.getElementById(
+            "vipRewardButton"
+        );
+
+
+    if (vipReward) {
+
+        vipReward.addEventListener(
+            "click",
+            function () {
+
+                const now =
+                    Date.now();
+
+
+                const day =
+                    24 *
+                    60 *
+                    60 *
+                    1000;
+
+
+                if (
+                    game.lastDailyReward &&
+                    (
+                        now -
+                        game.lastDailyReward
+                    ) < day
+                ) {
+
+                    showToast(
+                        "🎁 Already claimed today"
+                    );
+
+                    return;
+
+                }
+
+
+                const reward =
+                    100 *
+                    (
+                        game.vipLevel + 1
+                    );
+
+
+                game.balance +=
+                    reward;
+
+
+                game.lastDailyReward =
+                    now;
+
+
+                showToast(
+                    "🎁 +" +
+                    number(reward) +
+                    " BSHIB"
+                );
+
+
+                updateUI();
+
+                saveGame();
+
+            }
+        );
+
+    }
+
+
+    /* ========================================
+       COPY REFERRAL
+    ======================================== */
+
+    const copyReferral =
+        document.getElementById(
+            "copyReferral"
+        );
+
+
+    const referralCode =
+        document.getElementById(
+            "referralCode"
+        );
+
+
+    if (copyReferral) {
+
+        copyReferral.addEventListener(
+            "click",
+            function () {
+
+                const code =
+                    referralCode
+                        ? referralCode.textContent
+                        : "BSHIB";
+
+
+                if (
+                    navigator.clipboard
+                ) {
+
+                    navigator.clipboard
+                        .writeText(code)
+                        .then(function () {
+
+                            showToast(
+                                "📋 Copied"
+                            );
+
+                        })
+                        .catch(function () {
+
+                            showToast(
+                                "📋 BSHIB"
+                            );
+
+                        });
+
+                } else {
+
+                    showToast(
+                        "📋 BSHIB"
+                    );
+
+                }
+
+            }
+        );
+
+    }
+
+
+    /* ========================================
+       INVITE FRIENDS
+    ======================================== */
+
+    const inviteFriends =
+        document.getElementById(
+            "inviteFriends"
+        );
+
+
+    if (inviteFriends) {
+
+        inviteFriends.addEventListener(
+            "click",
+            function () {
+
+                const bot =
+                    "https://t.me/shibababycoinbot";
+
+
+                const text =
+                    "Join Baby Shiba Inu 🐕";
+
+
+                const share =
+                    "https://t.me/share/url" +
+                    "?url=" +
+                    encodeURIComponent(bot) +
+                    "&text=" +
+                    encodeURIComponent(text);
+
+
+                if (tg) {
+
+                    try {
+
+                        tg.openTelegramLink(
+                            share
+                        );
+
+                        return;
+
+                    } catch (e) {
+
+                        console.log(e);
+
+                    }
+
+                }
+
+
+                window.open(
+                    share,
+                    "_blank"
+                );
+
+            }
+        );
+
+    }
+
+
+    /* ========================================
+       AUTOMATIC MINING
+    ======================================== */
+
+    setInterval(
+        function () {
+
+            if (game.energy <= 0) {
+                return;
+            }
+
+
+            const vip =
+                getVIP();
+
+
+            const bonus =
+                1 +
+                (
+                    vip.mining /
+                    100
+                );
+
+
+            const earned =
+                game.mineRate *
+                bonus;
+
+
+            game.balance +=
+                earned;
+
+
+            game.totalMined +=
+                earned;
+
+
+            game.energy =
+                Math.max(
+                    0,
+                    game.energy - 1
+                );
+
+
+            addXP(1);
+
+
+            updateUI();
+
+        },
+        1000
+    );
+
+
+    /* ========================================
+       ENERGY RECHARGE
+    ======================================== */
+
+    setInterval(
+        function () {
+
+            if (
+                game.energy <
+                game.maxEnergy
+            ) {
+
+                game.energy =
+                    Math.min(
+                        game.maxEnergy,
+                        game.energy + 1
+                    );
+
+
+                updateUI();
+
+            }
+
+        },
+        3000
+    );
+
+
+    /* ========================================
+       AUTO SAVE
+    ======================================== */
+
+    setInterval(
+        function () {
+
+            saveGame();
+
+        },
+        5000
+    );
+
+
+    /* ========================================
+       FIRST UI UPDATE
+    ======================================== */
+
+    updateUI();
+
+});
